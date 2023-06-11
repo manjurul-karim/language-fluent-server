@@ -25,16 +25,34 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
-const courseCollection = client.db('languageDB').collection('course')
+    const courseCollection = client.db("languageDB").collection("course");
+    const selectCourseCollection = client
+      .db("languageDB")
+      .collection("selectCourse");
 
+    app.get("/course", async (req, res) => {
+      const result = await courseCollection.find().toArray();
+      res.send(result);
+    });
 
+    app.get("/selectcourse", async (req, res) => {
+      const email = req.query.email;
+      console.log(email);
+      if (!email) {
+        res.send([]);
+      }
 
+      const query = { email: email };
+      const result = await selectCourseCollection.find(query).toArray();
+      res.send(result);
+    });
 
-app.get('/course' , async(req,res) =>{
-    const result =await courseCollection.find().toArray()
-    res.send(result)
-})
-
+    app.post("/selectcourse", async (req, res) => {
+      const singleCourse = req.body;
+      console.log(singleCourse);
+      const result = await selectCourseCollection.insertOne(singleCourse);
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
