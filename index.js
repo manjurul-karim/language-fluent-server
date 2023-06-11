@@ -24,6 +24,18 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
+
+const courseCollection = client.db('languageDB').collection('course')
+
+
+
+
+app.get('/course' , async(req,res) =>{
+    const result =await courseCollection.find().toArray()
+    res.send(result)
+})
+
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
