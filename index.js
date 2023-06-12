@@ -34,6 +34,14 @@ async function run() {
     const userCollection = client.db("languageDB").collection("users");
     const paymentCollection = client.db("languageDB").collection("payments");
 
+    app.post("/jwt", (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1hr",
+      });
+      res.send({ token });
+    });
+
     //  ! user related API
 
     app.get("/users", async (req, res) => {
