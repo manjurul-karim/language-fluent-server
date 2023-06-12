@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -29,18 +29,22 @@ async function run() {
     const selectCourseCollection = client
       .db("languageDB")
       .collection("selectCourse");
+    const paymentCollection = client.db("languageDB").collection("payments");
 
+    //  ! All course
     app.get("/course", async (req, res) => {
       const result = await courseCollection.find().toArray();
       res.send(result);
     });
 
+    // !Select Course
+
     app.get("/selectcourse", async (req, res) => {
       const email = req.query.email;
       console.log(email);
-      if (!email) {
-        res.send([]);
-      }
+      // if (!email) {
+      //   res.send([]);
+      // }
 
       const query = { email: email };
       const result = await selectCourseCollection.find(query).toArray();
@@ -54,6 +58,12 @@ async function run() {
       res.send(result);
     });
 
+    app.delete("/selectcourse/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await selectCourseCollection.deleteOne(query);
+      res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
