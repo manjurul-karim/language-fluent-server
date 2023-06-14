@@ -1,7 +1,7 @@
 const express = require("express");
+const app = express();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-const app = express();
 require("dotenv").config();
 const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -46,12 +46,22 @@ async function run() {
     // Connect the client to the server (optional starting in v4.7)
     await client.connect();
 
+    //  ! collection list
+
     const courseCollection = client.db("languageDB").collection("course");
     const selectCourseCollection = client
       .db("languageDB")
       .collection("selectCourse");
     const userCollection = client.db("languageDB").collection("users");
+    const instructorCollection = client
+      .db("languageDB")
+      .collection("instructors");
+    const reviewClassCollection = client
+      .db("languageDB")
+      .collection("reviewClasses");
     const paymentCollection = client.db("languageDB").collection("payments");
+
+    //  ! jwt
 
     app.post("/jwt", (req, res) => {
       const user = req.body;
@@ -61,12 +71,27 @@ async function run() {
       res.send({ token });
     });
 
+    //  ! admin verify for secure link
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      if (user?.role !== "admin") {
+        return res
+          .status(403)
+          .send({ error: true, message: "forbidden message" });
+      }
+      next();
+    };
+
     //  ! user related API
 
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
+
+    //  ! user information stored in DB
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -81,6 +106,8 @@ async function run() {
       res.send(result);
     });
 
+    //  !  verify  Admin
+
     app.get("/users/admin/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
 
@@ -93,6 +120,8 @@ async function run() {
       const result = { admin: user?.role === "admin" };
       res.send(result);
     });
+
+    //  ! Verify Instructor
 
     app.get("/users/instructor/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
@@ -107,6 +136,23 @@ async function run() {
       res.send(result);
     });
 
+    //  ! Verify Student and user ByDefault Role Is Student.
+
+    app.get("/users/student/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+
+      if (req.decoded.email !== email) {
+        res.send({ student: false });
+      }
+
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const result = { student: user?.role === "student" };
+      res.send(result);
+    });
+
+    // ! make Role Admin
+
     app.patch("/users/admin/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -118,6 +164,8 @@ async function run() {
       const result = await userCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
+
+    //  ! Make Role Instructor
 
     app.patch("/users/instructor/:id", async (req, res) => {
       const id = req.params.id;
@@ -131,6 +179,8 @@ async function run() {
       res.send(result);
     });
 
+    //   ! User Deleted by Admin
+
     app.delete("/users/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -138,13 +188,62 @@ async function run() {
       res.send(result);
     });
 
-    // All courses
+    // ! instructor get Api
+
+    app.get("/instructors", async (req, res) => {
+      const result = await instructorCollection.find().toArray();
+      res.send(result);
+    });
+
+    // ! All courses
+
     app.get("/course", async (req, res) => {
       const result = await courseCollection.find().toArray();
       res.send(result);
     });
 
-    // Selected courses
+    // ! manage course  get api added by instructor
+
+    app.get("/reviewcourse", async (req, res) => {
+      const result = await reviewClassCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.delete("/reviewcourse/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await reviewClassCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // ! Add a Course by Instructor
+
+    app.post("/reviewcourse", verifyJWT, async (req, res) => {
+      const neweItem = req.body;
+      const result = await reviewClassCollection.insertOne(neweItem);
+      res.send(result);
+    });
+
+   
+    //  ! my added class get api for Instructor
+    app.get("/myaddedcourse", verifyJWT, async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        res.send([]);
+      }
+      const decodedEmail = req.decoded.email;
+      if (email !== decodedEmail) {
+        return res
+          .status(403)
+          .send({ error: true, message: " forbidden access" });
+      }
+      const query = { email: email };
+      const result = await reviewClassCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // !Selected courses
+
     app.get("/selectcourse", verifyJWT, async (req, res) => {
       const email = req.query.email;
       if (!email) {
@@ -161,11 +260,15 @@ async function run() {
       res.send(result);
     });
 
+    //  ! post select Course api
+
     app.post("/selectcourse", async (req, res) => {
       const singleCourse = req.body;
       const result = await selectCourseCollection.insertOne(singleCourse);
       res.send(result);
     });
+
+    //  ! Delete Selected Course
 
     app.delete("/selectcourse/:id", async (req, res) => {
       const id = req.params.id;
@@ -174,12 +277,12 @@ async function run() {
       res.send(result);
     });
 
-    // Payment API
+    // ! Payment API
     app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
       console.log(price);
       if (price) {
-        const amount = parseInt(price * 100);
+        const amount = parseFloat(price * 100);
         const paymentIntent = await stripe.paymentIntents.create({
           amount: amount,
           currency: "usd",
